@@ -28,6 +28,12 @@ Get Loan Status
     [Return]  ${status}
 
 *** Keyword ***
+Get Pan Number
+    [Arguments]  ${code}
+    ${status}=  Get Text  (//a[contains(text(),"${code}")]/../following-sibling::td)[1]
+    [Return]  ${pan}
+
+*** Keyword ***
 Perform Excel Work
     Open Workbook  ${CURDIR}//Loan Data//input.xlsx
     ${empty_row}=  Find Empty Row
@@ -41,6 +47,8 @@ Perform Excel Work
         ${status}=  Get Loan Status  ${loan_code}
         LOG  ${status}
 
+        ${pan_number}=  Get Pan Number  ${loan_code}
+        LOG  ${pan_number}
 
 
 #        //a[contains(text(),"7325")]
