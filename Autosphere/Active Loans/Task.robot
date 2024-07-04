@@ -30,7 +30,7 @@ Get Loan Status
 *** Keyword ***
 Get Pan Number
     [Arguments]  ${code}
-    ${status}=  Get Text  (//a[contains(text(),"${code}")]/../following-sibling::td)[1]
+    ${pan}=  Get Text  (//a[contains(text(),"${code}")]/../following-sibling::td)[1]
     [Return]  ${pan}
 
 *** Keyword ***
