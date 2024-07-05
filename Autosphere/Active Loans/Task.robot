@@ -157,6 +157,15 @@ Perform Excel Work
         &{account_detail}=  DownLoad And Extract Data from File  ${account_number}  ${loan_code}
         LOG  ${account_detail}
 
+        Set Cell Value    ${row}    B    ${account_detail}[Bank]
+        Set Cell Value    ${row}    C    ${account_detail}[Branch]
+        Set Cell Value    ${row}    D    ${account_detail}[Loan Date]
+        Set Cell Value    ${row}    E    ${account_detail}[Amount]
+        Set Cell Value    ${row}    F    ${account_detail}[EMI]
+        Set Cell Value    ${row}    G    ${pan_number}
+        Set Cell Value    ${row}    H    ${status}
+
+        Save Workbook
     END
     Close Workbook
 
