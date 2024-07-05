@@ -2,10 +2,12 @@
 Library     Autosphere.Browser.Playwright  auto_close=${FALSE}
 Library     Autosphere.Excel.Files
 Library     Autosphere.FileSystem
+Library     Autosphere.Archive
 Library     Autosphere.HTTP
 Library     OperatingSystem
+Library     Collections
 Library     String
-Library     Autosphere.Archive
+
 
 *** Keyword ***
 Goto Website And Download Excel File
@@ -63,16 +65,72 @@ Download And Unzip File
 
 
 *** Keyword ***
-DownLoad And Extract Data from Zip File
-    [Documentation]     This keyword download the zip file, unzip, extract required data from text file and return values in dictionary
+DownLoad And Extract Data from File
+    [Documentation]     This keyword download the zip file,
+    ...                 Unzip, Extract required data from text file
+    ...                 And return values in dictionary
+
     [Arguments]     ${acct_num}  ${code}
     &{detail}=  Create Dictionary
+    Set To Dictionary  ${detail}  Bank            ${EMPTY}
+    Set To Dictionary  ${detail}  Branch          ${EMPTY}
+    Set To Dictionary  ${detail}  Loan Date     ${EMPTY}
+    Set To Dictionary  ${detail}  Amount          ${EMPTY}
+    Set To Dictionary  ${detail}  EMI             ${EMPTY}
+
     ${extract_status}=  Run Keyword And Return Status  Download And Unzip File  ${acct_num}  ${code}
     IF    ${extract_status}
-         #This keyword read data from text file
+        LOG  Text file extract successfully. Now get required data from text file
+        ${content}=  Get File    ${CURDIR}\\Loan Data\\${acct_num}.txt
+        LOG  ${content}
+        @{lines}=  Split To Lines    ${content}
+        LOG  ${lines}
+        FOR    ${line}    IN    @{lines}
+            Log     ${line}
+            IF    "Bank" in """${line}"""
+                 @{values}=  Split String    ${line}  separator=:
+                 ${bank_name}=  Set Variable  ${values}[1]
+                 ${bank_name}=  Strip String    ${bank_name}
+                 Set To Dictionary    ${detail}  Bank=${bank_name}
+                 LOG  ${detail}
+            END
+
+            IF    "Branch" in """${line}"""
+                 @{values}=  Split String    ${line}  separator=:
+                 ${branch_name}=  Set Variable  ${values}[1]
+                 ${branch_name}=  Strip String    ${branch_name}
+                 Set To Dictionary    ${detail}  Branch=${branch_name}
+                 LOG  ${detail}
+            END
+
+            IF    "Loan Taken On" in """${line}"""
+                 @{values}=  Split String    ${line}  separator=:
+                 ${loan_date}=  Set Variable  ${values}[1]
+                 ${loan_date}=  Strip String    ${loan_date}
+                 Set To Dictionary    ${detail}  Loan Date=${loan_date}
+                 LOG  ${detail}
+            END
+
+            IF    "Amount" in """${line}"""
+                 @{values}=  Split String    ${line}  separator=:
+                 ${amount}=  Set Variable  ${values}[1]
+                 ${amount}=  Strip String    ${amount}
+                 Set To Dictionary    ${detail}  Amount=${amount}
+                 LOG  ${detail}
+            END
+
+            IF    "EMI" in """${line}"""
+                 @{values}=  Split String    ${line}  separator=:
+                 ${emi}=  Set Variable  ${values}[1]
+                 ${emi}=  Strip String    ${emi}
+                 Set To Dictionary    ${detail}  EMI=${emi}
+                 LOG  ${detail}
+            END
+        END
+        OperatingSystem.Remove Files  ${CURDIR}\\Loan Data\\${acct_num}.txt
     END
-
-
+    LOG  ${detail}
+    [Return]    ${detail}
 
 
 *** Keyword ***
@@ -96,10 +154,9 @@ Perform Excel Work
         ${pan_number}=  Get Pan Number  ${loan_code}
         LOG  ${pan_number}
 
-        DownLoad And Extract Data from Zip File  ${account_number}  ${loan_code}
+        &{account_detail}=  DownLoad And Extract Data from File  ${account_number}  ${loan_code}
+        LOG  ${account_detail}
 
-
-#        //a[contains(text(),"7325")]
     END
     Close Workbook
 
