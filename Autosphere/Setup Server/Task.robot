@@ -1,9 +1,11 @@
 *** Settings ***
-Library     Autosphere.Browser.Playwright   auto_close=${False}
+Library     Autosphere.Browser.Playwright   auto_close=${True}
 Library     Autosphere.Excel.Files
+Library     Autosphere.Email.ImapSmtp
 Library     Autosphere.HTTP
 Library     OperatingSystem
-Library    String
+Library     String
+
 
 
 *** Variables ***
@@ -11,6 +13,9 @@ ${WEBSITE}   https://botsdna.com/server/
 ${EXCEL_FILE}  input.xlsx
 ${DOWNLOAD_LINK}    https://botsdna.com/server/input.xlsx
 ${DOWNLOAD_DIRECTORY}   ${CURDIR}\\File
+${EMAIL_FROM}   [you_sender_gmail]@gmail.com
+${SMTP_SERVER}      smtp.gmail.com
+${SMTP_PORT}        587
 
 
 
@@ -18,7 +23,7 @@ ${DOWNLOAD_DIRECTORY}   ${CURDIR}\\File
 Open website and Download File
     Open Browser  url=${WEBSITE}
     Maximize Browser Window
-    Wait Until Page Contains Element    //*[contains(text(),"Server Setup")]
+    Wait Until Page Contains Element    //*[contains(text()," Server Creation")]
 #    Set Download Directory      ${DOWNLOAD_DIRECTORY}
     ${file_status}=  Run Keyword And Return Status  File Should Exist   ${DOWNLOAD_DIRECTORY}\\input.xlsx
     Run Keyword If    ${file_status} == False
@@ -43,13 +48,42 @@ Read Data And Create Server
         ${application}=  Strip String    ${application}
         @{apps}=  Split String  ${application}  separator=,
         ${len}=  Get Length    ${apps}
+        ${receipient}=  Set Variable  ${row}[EmailID]
+        ${receipient}=  Strip String    ${receipient}
 
-        Create Server  ${request_id}  ${os}  ${ram}  ${hdd}  ${apps}
-
-
+        ${status}  ${ip}  ${user}  ${pass}  Create Server  ${request_id}  ${os}  ${ram}  ${hdd}  ${apps}
+        IF    '${status}' == 'True'
+            LOG  Server Credentials Created Successfully
+            LOG  ${ip}
+            LOG  ${user}
+            LOG  ${pass}
+            Send Email  ${ip}  ${user}  ${pass}  ${receipient}
+        ELSE
+            LOG   Business Exception. Problem creating server. Skipping the record
+        END
     END
     Close Workbook
 
+Send Email
+    [Documentation]     This keyword take the credentials of newly created server
+    ...                 and send the email address that is get from excel file.
+    [Arguments]  ${ip}  ${user}  ${pass}  ${receipient}
+    ${to}=  Set Variable  ${receipient}
+    ${sender}=  Set Variable  ${EMAIL_FROM}
+    ${smtp_server}=  Set Variable  ${SMTP_SERVER}
+    ${smtp_port}=  Set Variable  ${SMTP_PORT}
+    ${subject}=  Set Variable  Server Created
+    ${body}=  Catenate
+    ...     Server Created Successfully. Please find the credentials below:\n\n
+    ...     IP Address:  ${ip}\n
+    ...     Username:  ${user}\n
+    ...     Password:  ${pass}$\n
+    LOG  ${body}
+#    Fail  Test
+#    Authorize  account=${EMAIL_FROM}  password=[App_Password]  smtp_server=${SMTP_SERVER}  smtp_port=${SMTP_PORT}
+#    Send Message  ${sender}  ${to}  ${subject}  ${body}
+    LOG  Sending Email To: ${to}
+    LOG  Email sending keywords are commented.
 
 Create Server
     [Arguments]  ${request_id}  ${os}  ${ram}  ${hdd}  ${apps}
@@ -63,7 +97,12 @@ Create Server
     ${hdd_selection_status}=  Set Variable  ${False}
     ${apps_selection_status}=  Set Variable  ${False}
 
-    Wait Until Page Contains Element    //*[contains(text(),"Server Setup")]
+    ${ip}=  Set Variable  ${None}
+    ${username}=  Set Variable  ${None}
+    ${password}=  Set Variable  ${None}
+    ${status}=  Set Variable  ${False}
+
+    Wait Until Page Contains Element    //*[contains(text()," Server Creation")]
     Select From List By Label    //*[@id="os"]   ${os}
     ${selected_os}=  Get Value    //*[@id="os"]
     IF    '${selected_os}' == '${os}'
@@ -80,15 +119,25 @@ Create Server
     ${apps_selection_status}=  Select Applications   ${apps}   ${apps_selection_status}
 
     IF    ('${os_selection_status}' == '${True}') and ('${ram_selection_status}' == '${True}') and ('${hdd_selection_status}' == '${True}') and ('${apps_selection_status}' == '${True}')
+         ${status}=  Set Variable  ${True}
          Click Element    (//*[(@type="button") and (@value="Create Server")])
          Wait Until Page Contains Element    //*[@id="serverIP"]   timeout=15s
+         Wait Until Element Is Visible    //*[@id="serverIP"]/table/tbody/tr[1]/td[1]   timeout=15s
+         ${ip}=  Get Text    //*[@id="serverIP"]/table/tbody/tr[1]/td[2]
+         ${username}=  Get Text    //*[@id="serverIP"]/table/tbody/tr[2]/td[2]
+         ${password}=  Get Text    //*[@id="serverIP"]/table/tbody/tr[3]/td[2]
+         ${status}=  Set Variable  ${True}
+
          Go Back
-         Wait Until Page Contains Element    //*[contains(text(),"Server Setup")]
+         Wait Until Page Contains Element    //*[contains(text()," Server Creation")]
+         Wait Until Element Is Visible     //*[contains(text()," Server Creation")]
          Reload Page
-         Wait Until Page Contains Element    //*[contains(text(),"Server Setup")]
+         Wait Until Page Contains Element    //*[contains(text()," Server Creation")]
+         Wait Until Element Is Visible     //*[contains(text()," Server Creation")]
 
 
     END
+    [Return]  ${status}  ${ip}  ${username}  ${password}
 Select Size
     [Arguments]    ${hdd}       ${hdd_status}
     ${radio_buttons_count}=  Get Element Count    //*[@id="hdd"]
@@ -107,6 +156,7 @@ Select Size
 
 Select Applications
     [Arguments]     ${apps}     ${apps_status}
+    Log  ${apps}
     ${len}=  Get Length    ${apps}
     ${checkbox_count}=  Get Element Count  (//*[@type="checkbox"])
 
