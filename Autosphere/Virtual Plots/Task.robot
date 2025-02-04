@@ -4,12 +4,15 @@ Library    Autosphere.Excel.Files
 Library    OperatingSystem
 Library    Autosphere.HTTP
 Library    String
+Library    DateTime
+Library    Autosphere.Email.ImapSmtp
 
 *** Variables ***
 ${URL}  https://botsdna.com/vitrualplots/
 ${FILE_PATH}  ${CURDIR}\\File
 ${DOWNLOAD_URL}  https://botsdna.com/vitrualplots/input.xlsx
 ${FILE_NAME}  input.xlsx
+&{SMTP_DETAIL}  server=smtp.gmail.com  smtp_port=587  username=danysheikh@gmail.com  password=[APP_PASSWORD]
 
 *** Keywords ***
 Open Website And Download Required File
@@ -29,8 +32,11 @@ Booking Land Virtual
     Open Workbook    ${FILE_PATH}\\${FILE_NAME}
     @{details}=  Read Worksheet  header=${True}
     LOG  ${details}
+    ${row}=  Set Variable  2
     FOR    ${detail}    IN    @{details}
+        LOG    ${row}
         Log    ${detail}
+        ${excel_status}=  Set Variable  Not Success
         ${seller_number}=  Set Variable  ${detail}[Seller Mobile]
         ${valid_seller_number}=  Validated Number  ${seller_number}
         LOG  ${valid_seller_number}
@@ -47,16 +53,85 @@ Booking Land Virtual
         ${status}  ${transaction_number}  ${buyer_name}  ${seller_name}  Perform Booking Over Website  ${valid_seller_number}  ${valid_buyer_number}  ${plot_number}  ${area}
         IF    ${status}
             LOG  Plot Booked Successfully ${\n} Buyer Name: ${buyer_name} ${\n} Seller Name: ${seller_name} ${\n} Transaction Number: ${transaction_number}   INFO
+            LOG  ${SMTP_DETAIL}
+            IF  ("${seller_email}" != "None") and ("${buyer_email}" != "None")
+                ${email_status}  Run Keyword And Return Status   Send Email  ${SMTP_DETAIL}  ${detail}  ${buyer_name}  ${seller_name}  ${transaction_number}
+                IF    ${email_status}
+                     ${excel_status}=  Set Variable    ${transaction_number}
+                ELSE
+                     ${excel_status}=  Set Variable    Problem Sending Email
+                END
+            ELSE
+                ${excel_status}=  Set Variable    Email Not Valid
+            END
 
         ELSE
             LOG  Problem Occurred While Booking Plot
+            ${excel_status}=  Set Variable    Problem Occurred While Booking Plot
         END
+
+        Set Cell Value    ${row}    G    ${excel_status}
+        ${row}=  Evaluate    ${row} + 1
+        Save Workbook
 
     END
 
-
-
     Close Workbook
+
+*** Keywords ***
+Send Email
+    [Documentation]   This Keyword send an email as per required format
+    [Arguments]     ${SMTP_DETAIL}  ${detail}  ${buyer_name}  ${seller_name}  ${transaction_number}
+    LOG  ${buyer_name}
+    LOG  ${seller_name}
+    LOG  ${transaction_number}
+    LOG  ${detail}
+    LOG  ${SMTP_DETAIL}
+    ${date}=  Get Current Date
+    ${subject}=  Set Variable  Plot has booked Successfully - ${transaction_number}
+    ${receiver}=  Set Variable  ${detail}[Buyer Email],${detail}[Seller Email]
+    ${body}=  Catenate
+    ...      <html>
+    ...      <head>
+    ...        <style>
+    ...          body { font-family: Arial, sans-serif; font-size: 14px; color: #333; }
+    ...        </style>
+    ...      </head>
+    ...      <body>
+    ...        <p>Dear <b>${seller_name}</b> & <b>${buyer_name}</b>,</p>
+    ...        <p>New Plot (Plot Number: <b>${detail}[Plot No]</b> ) with No.of.Sqft <b>${detail}[Sqft]</b> has been Booked successfully on ${date}</p>
+    ...        <p>Here you can find Booking Details...</p>
+    ...        <table border='1' style='border-collapse:collapse'>
+    ...            <tr>
+    ...                <td>Booking Number</td>
+    ...                <td>${transaction_number}</td>
+    ...            </tr>
+    ...            <tr>
+    ...                <td>Buyer Name</td>
+    ...                <td>${buyer_name}</td>
+    ...            </tr>
+    ...            <tr>
+    ...                <td>Buyer Phone Number</td>
+    ...                <td>${detail}[Buyer Mobile]</td>
+    ...            </tr>
+    ...            <tr>
+    ...                <td>Seller Name</td>
+    ...                <td>${seller_name}</td>
+    ...            </tr>
+    ...            <tr>
+    ...                <td>Seller Phone Number</td>
+    ...                <td>${detail}[Seller Mobile]</td>
+    ...            </tr>
+    ...        </table><br>
+    ...        <p>Thanks |</p>
+    ...      </body>
+    ...    </html>
+    LOG  ${body}
+#    Authorize  account=${SMTP_DETAIL}[username]  password=${SMTP_DETAIL}[password]  smtp_server=${SMTP_DETAIL}[server]  smtp_port=${SMTP_DETAIL}[smtp_port]
+#    Send Message  sender=${SMTP_DETAIL}[username]  recipients=${receiver}  subject=${subject}  body=${body}  html=True
+    LOG  Authorize and Send Message keyword is commented in Code
+
+
 
 *** Keywords ***
 Perform Booking Over Website
